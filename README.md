@@ -1,6 +1,6 @@
 ﻿# cc-fraud-fti-mlops
 
-FTI-style (Feature → Transform → Inference) MLOps portfolio project for credit card fraud detection.
+FTI-style (Feature → Train → Inference) MLOps portfolio project for credit card fraud detection.
 
 ## Repo structure
 - docs/                Project documentation
