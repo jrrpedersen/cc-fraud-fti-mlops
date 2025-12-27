@@ -28,10 +28,13 @@ x-airflow-common: &airflow-common
     # Later we’ll bake these into a custom image for speed/reproducibility.
     _PIP_ADDITIONAL_REQUIREMENTS: "boto3 s3fs redis requests"
 
+    PYTHONPATH: /opt/airflow/repo
+
   volumes:
     - ../pipelines/airflow/dags:/opt/airflow/dags
     - ../pipelines/airflow/logs:/opt/airflow/logs
     - ../pipelines/airflow/plugins:/opt/airflow/plugins
+    - ..:/opt/airflow/repo
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     postgres:
