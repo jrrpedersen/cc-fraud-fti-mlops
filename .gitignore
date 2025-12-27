@@ -1,0 +1,23 @@
+﻿# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Airflow
+airflow.db
+logs/
+
+# Spark
+spark-warehouse/
+*.parquet
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Terraform (later)
+.terraform/
+*.tfstate
+*.tfstate.*
