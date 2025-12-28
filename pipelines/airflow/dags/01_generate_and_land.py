@@ -97,6 +97,28 @@ def list_landing_prefix(**context) -> None:
     for obj in contents:
         print(f" - {obj['Key']} ({obj['Size']} bytes)")
 
+def write_latest_pointer(**context) -> str:
+    """
+    Write/overwrite a small '_LATEST' object under the dt partition containing
+    the key of the most recent successful landing object for that day.
+
+    This keeps landing data immutable while providing a stable pointer for downstream jobs.
+    """
+    client = _s3_client()
+    bucket = os.getenv("LANDING_BUCKET", "mlops")
+
+    ds = context["ds"]
+    # The actual object key returned by upload_to_minio
+    landed_key = context["ti"].xcom_pull(task_ids="upload_to_minio")
+
+    latest_key = f"landing/transactions/dt={ds}/_LATEST"
+    body = (landed_key.strip() + "\n").encode("utf-8")
+
+    client.put_object(Bucket=bucket, Key=latest_key, Body=body, ContentType="text/plain")
+    print(f"Wrote pointer s3://{bucket}/{latest_key} -> {landed_key}")
+
+    return latest_key
+
 def preview_local_file(**context) -> None:
     local_path = context["ti"].xcom_pull(task_ids="generate_transactions")
     path = Path(local_path)
@@ -143,4 +165,10 @@ with DAG(
         python_callable=list_landing_prefix,
     )
 
-    t_gen >> t_preview >> t_upload >> t_verify
+    t_latest = PythonOperator(
+        task_id="write_latest_pointer",
+        python_callable=write_latest_pointer,
+    )   
+
+
+    t_gen >> t_preview >> t_upload >> t_verify >> t_latest
