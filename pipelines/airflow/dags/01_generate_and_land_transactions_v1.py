@@ -164,6 +164,91 @@ def verify_latest_pointers(**context) -> None:
         s3.head_object(Bucket=bucket, Key=landed_key)
         print(f"Verified {latest_key} -> {landed_key}")
 
+def validate_referential_integrity(**context) -> None:
+    """
+    Validates that:
+      - transactions reference existing cards/accounts/merchants
+      - fraud_labels reference existing transaction IDs and cards
+      - required fields exist
+
+    Runs on the locally generated files (before upload).
+    """
+    payload = context["ti"].xcom_pull(task_ids="generate_transactions_and_labels")
+    paths: dict = payload["paths"]
+
+    ref_payload = context["ti"].xcom_pull(task_ids="download_world_files")
+    datasets: dict = ref_payload["datasets"]
+
+    required_tx_fields = {
+        "t_id","cc_num","account_id","merchant_id","amount","currency","country",
+        "ip_address","card_present","channel","category","lat","lon","ts"
+    }
+    required_label_fields = {"t_id","cc_num","explanation","ts"}
+
+    def load_id_set(path: str, key: str) -> set[str]:
+        ids = set()
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                obj = json.loads(line)
+                ids.add(obj[key])
+        return ids
+
+    card_ids = load_id_set(datasets["cards"], "cc_num")
+    account_ids = load_id_set(datasets["accounts"], "account_id")
+    merchant_ids = load_id_set(datasets["merchants"], "merchant_id")
+
+    tx_ids: set[str] = set()
+    n_tx = 0
+    n_bad = 0
+
+    tx_path = paths["transactions"]
+    with open(tx_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            tx = json.loads(line)
+            n_tx += 1
+
+            missing = required_tx_fields - set(tx.keys())
+            if missing:
+                raise RuntimeError(f"Transaction missing fields {missing}: {tx}")
+
+            if tx["cc_num"] not in card_ids:
+                n_bad += 1
+                raise RuntimeError(f"Unknown cc_num in tx: {tx['cc_num']} (t_id={tx.get('t_id')})")
+            if tx["account_id"] not in account_ids:
+                n_bad += 1
+                raise RuntimeError(f"Unknown account_id in tx: {tx['account_id']} (t_id={tx.get('t_id')})")
+            if tx["merchant_id"] not in merchant_ids:
+                n_bad += 1
+                raise RuntimeError(f"Unknown merchant_id in tx: {tx['merchant_id']} (t_id={tx.get('t_id')})")
+
+            tx_ids.add(tx["t_id"])
+
+    label_path = paths["fraud_labels"]
+    n_labels = 0
+    with open(label_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            lab = json.loads(line)
+            n_labels += 1
+
+            missing = required_label_fields - set(lab.keys())
+            if missing:
+                raise RuntimeError(f"Fraud label missing fields {missing}: {lab}")
+
+            if lab["t_id"] not in tx_ids:
+                raise RuntimeError(f"Fraud label references unknown t_id: {lab['t_id']}")
+            if lab["cc_num"] not in card_ids:
+                raise RuntimeError(f"Fraud label references unknown cc_num: {lab['cc_num']}")
+
+    print("[integrity] OK")
+    print(f"[integrity] transactions={n_tx:,} unique_tx_ids={len(tx_ids):,}")
+    print(f"[integrity] fraud_labels={n_labels:,}")
+
 
 default_args = {
     "owner": "mlops",
@@ -186,5 +271,5 @@ with DAG(
     t_up = PythonOperator(task_id="upload_tx_and_labels", python_callable=upload_tx_and_labels)
     t_latest = PythonOperator(task_id="write_latest_pointers", python_callable=write_latest_pointers)
     t_verify = PythonOperator(task_id="verify_latest_pointers", python_callable=verify_latest_pointers)
-
-    t_world >> t_dl >> t_gen >> t_up >> t_latest >> t_verify
+    t_validate = PythonOperator(task_id="validate_referential_integrity",python_callable=validate_referential_integrity)   
+    t_world >> t_dl >> t_gen >> t_validate >> t_up >> t_latest >> t_verify

@@ -3,7 +3,7 @@ version: "3.8"
 x-airflow-common: &airflow-common
   # For now, use the official image. Later we can switch to a custom build
   # (docker/airflow/Dockerfile) to add providers + extra Python deps.
-  image: apache/airflow:2.10.3
+  image: cc-fraud-airflow:local
   environment:
     # --- Airflow core ---
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -26,7 +26,7 @@ x-airflow-common: &airflow-common
 
     # Optional: install a couple small libs at container start (ok for Phase 1)
     # Later we’ll bake these into a custom image for speed/reproducibility.
-    _PIP_ADDITIONAL_REQUIREMENTS: "boto3 s3fs redis requests"
+    # _PIP_ADDITIONAL_REQUIREMENTS: "boto3 s3fs redis requests"
 
     PYTHONPATH: /opt/airflow/repo
 
@@ -69,6 +69,9 @@ services:
           --role Admin \
           --email admin@example.com
     restart: "no"
+    depends_on:
+      airflow-image:
+        condition: service_completed_successfully
 
   airflow-webserver:
     <<: *airflow-common
@@ -81,11 +84,24 @@ services:
       timeout: 10s
       retries: 10
     restart: unless-stopped
+    depends_on:
+      airflow-image:
+        condition: service_completed_successfully
 
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
     restart: unless-stopped
+    depends_on:
+      airflow-image:
+        condition: service_completed_successfully
+  
+  airflow-image:
+    image: cc-fraud-airflow:local
+    build:
+      context: ./airflow
+    command: ["bash", "-lc", "echo built"]
+
 
   # S3-compatible local object storage (mirrors AWS S3 later)
   minio:
