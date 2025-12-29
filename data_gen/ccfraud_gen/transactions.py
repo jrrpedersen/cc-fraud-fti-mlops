@@ -11,6 +11,10 @@ from .geo import pick_next_country, sample_ip, sample_lat_lon
 from .fraud import chain_attack_events, geo_fraud_pair
 from .io import write_jsonl
 
+def parse_start_utc(s: str) -> datetime:
+    s = s.replace("Z", "+00:00")
+    return datetime.fromisoformat(s).astimezone(timezone.utc)
+
 
 def _iso(dt: datetime) -> str:
     if dt.tzinfo is None:
@@ -51,6 +55,12 @@ def _build_indexes(world: dict[str, list[dict[str, Any]]]) -> tuple[dict[str, di
         merchants_by_country.setdefault(m["country"], []).append(m)
     return accounts, cards, merchants_by_country
 
+def clamp_ts(ts, start, end):
+    if ts < start:
+        return start
+    if ts >= end:
+        return end - timedelta(seconds=1)
+    return ts
 
 def generate_transactions_and_labels(
     out_dir: Path,
@@ -77,7 +87,7 @@ def generate_transactions_and_labels(
     accounts_by_id, cards_by_id, merchants_by_country = _build_indexes(world)
 
     # Determine time window
-    start = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    start = parse_start_utc(cfg_obj.start_utc)
     end = start + timedelta(minutes=cfg_obj.duration_minutes)
 
     # Choose number of fraud transactions approximately.
@@ -127,6 +137,7 @@ def generate_transactions_and_labels(
         prev = start
         for off in offsets:
             ts = start + timedelta(seconds=off)
+            ts = clamp_ts(ts, start, end)
             if ts < prev:
                 ts = prev
             # choose next country based on probabilities + neighbors
@@ -143,6 +154,10 @@ def generate_transactions_and_labels(
                 min_gap = timedelta(hours=cfg_obj.min_hours_between_country_changes)
                 if ts < prev + min_gap:
                     ts = prev + min_gap
+            ts = clamp_ts(ts, start, end)
+            # If we're at (or effectively at) the end of the window, stop generating more
+            if ts >= end - timedelta(seconds=1):
+                break
             current_country = next_country
             prev = ts
 

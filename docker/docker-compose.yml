@@ -149,6 +149,19 @@ services:
       timeout: 3s
       retries: 20
     restart: unless-stopped
+  
+  feast:
+    build:
+      context: ./feast
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      # Feast will read local parquet files via this mount
+      FEAST_USAGE: "false"
+    volumes:
+      - ../feature_repo:/feature_repo
+    working_dir: /feature_repo
 
 volumes:
   postgres-db-volume:

@@ -1,0 +1,13 @@
+project: ccfraud
+registry: data/registry.db
+provider: local
+
+# Dask offline store reads FileSources (parquet on disk or S3).
+offline_store:
+  type: dask
+
+online_store:
+  type: redis
+  connection_string: "redis:6379"
+  # Keep online keys for 30 days (optional)
+  key_ttl_seconds: 2592000

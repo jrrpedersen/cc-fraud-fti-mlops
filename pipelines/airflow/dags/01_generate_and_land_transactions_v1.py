@@ -95,6 +95,9 @@ def generate_transactions_and_labels(**context) -> dict:
         "duration_minutes": int(os.getenv("TX_DURATION_MINUTES", "60")),
         "fraud_rate": float(os.getenv("FRAUD_RATE", "0.0005")),
         "chain_attack_ratio": float(os.getenv("CHAIN_ATTACK_RATIO", "0.9")),
+
+        "start_utc": f"{ds}T00:00:00Z",
+        
     }
 
     paths = gen_tx(out_dir=out_dir, world=world, seed=seed, cfg=cfg)

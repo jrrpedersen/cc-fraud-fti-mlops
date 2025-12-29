@@ -13,9 +13,11 @@ class ReferenceConfig:
 
 @dataclass(frozen=True)
 class TransactionConfig:
-    n_transactions: int = 50_000
+    start_utc: str            # ISO8601 string like "2025-12-29T00:00:00Z"
     duration_minutes: int = 60
 
+    n_transactions: int = 50_000
+    
     # Behavior realism
     p_home: float = 0.85
     p_neighbor: float = 0.10
