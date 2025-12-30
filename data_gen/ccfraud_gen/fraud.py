@@ -14,7 +14,7 @@ def _iso(dt: datetime) -> str:
 
 
 def chain_attack_events(
-    rng: random.Random,
+    rng: random.Random, # Passing it in is nice because we can seed it outside and get reproducible randomness
     card: dict[str, Any],
     merchants_by_country: dict[str, list[dict[str, Any]]],
     start: datetime,
