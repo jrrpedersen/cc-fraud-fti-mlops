@@ -1,3 +1,10 @@
+# This file is the “main orchestration” layer that:
+# 1. loads config + seeds RNG
+# 2. builds lookup indexes from the reference world (accounts/cards/merchants)
+# 3. generates base (mostly normal) transactions per card within a time window
+# 4. injects two types of fraud patterns (chain attacks + geo pairs)
+# 5. writes transactions.jsonl + fraud_labels.jsonl
+
 from __future__ import annotations
 
 import math
@@ -24,7 +31,7 @@ def _iso(dt: datetime) -> str:
 
 def _rand_amount(rng: random.Random) -> float:
     # Lognormal-ish distribution, clipped.
-    amt = rng.lognormvariate(mu=3.4, sigma=0.75)
+    amt = rng.lognormvariate(mu=3.4, sigma=0.75) # median ~30, mean ~40, mode ~17
     amt = max(0.5, min(amt, 5000.0))
     return round(amt, 2)
 
@@ -86,6 +93,11 @@ def generate_transactions_and_labels(
 
     accounts_by_id, cards_by_id, merchants_by_country = _build_indexes(world)
 
+    # Countries that actually have at least one merchant
+    available_countries = [c for c, ms in merchants_by_country.items() if ms]
+    if not available_countries:
+        raise ValueError("World has no merchants; cannot generate transactions.")
+
     # Determine time window
     start = parse_start_utc(cfg_obj.start_utc)
     end = start + timedelta(minutes=cfg_obj.duration_minutes)
@@ -105,9 +117,10 @@ def generate_transactions_and_labels(
     per_card_counts = {}
     remaining = n_base
     # pick a subset of active cards
-    active_cards = rng.sample(cards, k=min(n_cards, max(1000, n_cards // 10)))
+    active_cards = rng.sample(cards, k=min(n_cards, max(1000, n_cards // 10))) # at least 10% or 1000 cards
     for c in active_cards:
         # geometric-ish around mean
+        # assign each active card a count k sampled from an exponential distribution (light-tailed-ish) capped at 200.
         k = min(200, max(0, int(rng.expovariate(1.0 / max(1.0, mean_per_card)))))
         per_card_counts[c["cc_num"]] = k
         remaining -= k
@@ -162,7 +175,13 @@ def generate_transactions_and_labels(
             prev = ts
 
             mlist = merchants_by_country.get(current_country) or []
-            merchant = rng.choice(mlist) if mlist else {"merchant_id": "m_unknown", "category": "other", "country": current_country}
+            if not mlist:
+                # fallback: move this tx to a country that has merchants
+                current_country = rng.choice(available_countries)
+                mlist = merchants_by_country[current_country]
+
+            merchant = rng.choice(mlist)
+                        
             channel, card_present = _channel_and_card_present(rng, merchant.get("category", "other"))
             lat, lon = sample_lat_lon(rng, current_country)
             ip = sample_ip(rng, current_country)

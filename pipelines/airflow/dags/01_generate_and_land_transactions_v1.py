@@ -461,6 +461,7 @@ def validate_referential_integrity(**context) -> None:
     tx_ts_by_id: dict[str, datetime] = {}
     tx_cc_by_id: dict[str, str] = {}
     n_tx = 0
+    n_bad = 0
 
     # Validate transactions file
     tx_path = paths["transactions"]
