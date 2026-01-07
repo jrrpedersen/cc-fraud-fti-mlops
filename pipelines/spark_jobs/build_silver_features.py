@@ -36,7 +36,7 @@ def build_spark(app_name: str = "ccfraud_silver_mit") -> "SparkSession":
     SparkSession, _, _ = _lazy_import_spark()
     return (
         SparkSession.builder
-        .master("local[*]")
+        .master("local[*]") # run Spark locally using all CPU cores available in the container/host
         .appName(app_name)
         # keep local runs stable on laptops
         .config("spark.sql.shuffle.partitions", "16")
@@ -55,14 +55,14 @@ def compute_silver(
       - card_features_snapshot (latest row per cc_num)
       - merchant_features_snapshot (latest row per merchant_id)
     """
-    SparkSession, F, Window = _lazy_import_spark()
+    SparkSession, F, Window = _lazy_import_spark() # delays importing pyspark until runtime
     spark = spark or build_spark()
 
     tx = spark.read.parquet(str(paths.bronze_tx_parquet_dir))
     labels = spark.read.parquet(str(paths.bronze_labels_parquet_dir))
 
     # ---- Normalize + prepare ----
-    # Expecting columns from our generator (v1). If your schema differs,
+    # Expecting columns from our generator (v1). If schema differs,
     # adjust these field names in one place here.
     required_tx_cols = {"t_id", "ts", "cc_num", "merchant_id", "amount", "ip_address", "card_present"}
     missing = sorted(list(required_tx_cols - set(tx.columns)))
@@ -72,7 +72,9 @@ def compute_silver(
     if "t_id" not in labels.columns:
         raise ValueError(f"Fraud labels parquet must contain t_id. Available={sorted(labels.columns)}")
 
+    # Timestamp normalization
     tx = tx.withColumn("ts", F.to_timestamp("ts"))
+    # Epoch seconds for window calculations
     tx = tx.withColumn("ts_epoch", F.unix_timestamp("ts").cast("long"))
 
     # Label: 1 if transaction id present in fraud_labels else 0
@@ -112,6 +114,9 @@ def compute_silver(
     )
 
     # ---- Merchant "risk" rolling fraud counts (MIT) ----
+    # Count of prior fraudulent transactions for this merchant in various lookback windows
+    # Note: we include the current transaction in the count (rangeBetween is inclusive).
+    # Risk: Label leakage
     w_m = Window.partitionBy("merchant_id").orderBy(F.col("ts_epoch")).rangeBetween
     tx = (
         tx

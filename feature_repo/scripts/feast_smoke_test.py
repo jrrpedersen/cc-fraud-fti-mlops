@@ -12,13 +12,17 @@ Run (from repo root)
 
 Run via Docker (recommended, no local deps)
   cd docker
-  docker compose run --rm feast python /feature_repo/../scripts/feast_smoke_test.py --repo-path /feature_repo
+  docker compose run --rm feast python /feature_repo/../scripts/feast_smoke_test.py \--repo-path /feature_repo \ --require-non-null
 
 Notes
 - This assumes you've already run:
     - Airflow DAG 03_build_silver_mit_features_v1
     - feast apply
+        - docker compose build feast
+        - docker compose up -d feast
+        - docker compose run --rm feast feast apply
     - feast materialize (or materialize-incremental)
+        - docker compose run --rm feast feast materialize 2025-01-01T00:00:00 2026-01-02T00:00:00
 """
 
 from __future__ import annotations
@@ -115,13 +119,13 @@ def main() -> int:
     p.add_argument("--repo-path", default="feature_repo", help="Path to Feast repo (contains feature_store.yaml)")
     p.add_argument(
         "--card-parquet-glob",
-        default="feature_repo/data/offline/card_features/current/*.parquet",
-        help="Glob for offline 'current' card feature snapshots",
+        default=None,
+        help="Glob for offline 'current' card feature snapshots. If omitted, derived from --repo-path.",
     )
     p.add_argument(
-        "--merchant-parquet-glob",
-        default="feature_repo/data/offline/merchant_features/current/*.parquet",
-        help="Glob for offline 'current' merchant feature snapshots",
+    "--merchant-parquet-glob",
+    default=None,
+    help="Glob for offline 'current' merchant feature snapshots. If omitted, derived from --repo-path.",
     )
     p.add_argument("--cc-num", default=None, help="Override cc_num entity id")
     p.add_argument("--merchant-id", default=None, help="Override merchant_id entity id")
@@ -138,12 +142,14 @@ def main() -> int:
     )
 
     args = p.parse_args()
+    card_glob = args.card_parquet_glob or f"{args.repo_path}/data/offline/card_features/current/*.parquet"
+    merchant_glob = args.merchant_parquet_glob or f"{args.repo_path}/data/offline/merchant_features/current/*.parquet"
     try:
         return run(
             repo_path=args.repo_path,
             features=args.features,
-            card_glob=args.card_parquet_glob,
-            merchant_glob=args.merchant_parquet_glob,
+            card_glob=card_glob,
+            merchant_glob=merchant_glob,
             cc_num=args.cc_num,
             merchant_id=args.merchant_id,
             require_non_null=args.require_non_null,
