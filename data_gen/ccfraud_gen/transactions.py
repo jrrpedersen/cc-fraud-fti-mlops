@@ -163,14 +163,15 @@ def generate_transactions_and_labels(
                 p_international=cfg_obj.p_international,
             )
             if next_country != current_country:
-                # enforce min gap between country changes
                 min_gap = timedelta(hours=cfg_obj.min_hours_between_country_changes)
+                # If we can't satisfy the gap inside the window, keep country unchanged.
                 if ts < prev + min_gap:
-                    ts = prev + min_gap
+                    next_country = current_country
+
             ts = clamp_ts(ts, start, end)
-            # If we're at (or effectively at) the end of the window, stop generating more
             if ts >= end - timedelta(seconds=1):
                 break
+
             current_country = next_country
             prev = ts
 
@@ -228,7 +229,8 @@ def generate_transactions_and_labels(
             rng=rng,
             card=card,
             merchants_by_country=merchants_by_country,
-            start=base_dt,
+            window_start=start,
+            window_end=end,
             duration_min=cfg_obj.chain_duration_min_minutes,
             duration_max=cfg_obj.chain_duration_max_minutes,
             size_min=cfg_obj.chain_size_min,
@@ -246,7 +248,8 @@ def generate_transactions_and_labels(
             rng=rng,
             card=card,
             merchants_by_country=merchants_by_country,
-            start=base_dt,
+            window_start=start,
+            window_end=end,
             gap_min=cfg_obj.geo_gap_min_minutes,
             gap_max=cfg_obj.geo_gap_max_minutes,
         )

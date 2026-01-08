@@ -15,4 +15,8 @@ RUN pip install --no-cache-dir \
     pyspark==3.5.3 \
     boto3==1.34.162 \
     requests==2.32.3 \
-    redis==5.0.8
+    redis==5.0.8 \
+    pandas==2.2.3 \
+    pyarrow==17.0.0 \
+    scikit-learn==1.5.2 \
+    mlflow==2.17.2

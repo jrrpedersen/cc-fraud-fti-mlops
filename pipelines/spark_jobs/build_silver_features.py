@@ -115,14 +115,14 @@ def compute_silver(
 
     # ---- Merchant "risk" rolling fraud counts (MIT) ----
     # Count of prior fraudulent transactions for this merchant in various lookback windows
-    # Note: we include the current transaction in the count (rangeBetween is inclusive).
-    # Risk: Label leakage
+    # Note: The window end is changedfrom 0 to -1 (exclude the current transaction)
+    # To avoid label leakage
     w_m = Window.partitionBy("merchant_id").orderBy(F.col("ts_epoch")).rangeBetween
     tx = (
         tx
-        .withColumn("m_fraud_cnt_1d", F.sum("label_is_fraud").over(w_m(-86400, 0)))
-        .withColumn("m_fraud_cnt_7d", F.sum("label_is_fraud").over(w_m(-(7 * 86400), 0)))
-        .withColumn("m_fraud_cnt_30d", F.sum("label_is_fraud").over(w_m(-(30 * 86400), 0)))
+        .withColumn("m_fraud_cnt_1d",  F.sum("label_is_fraud").over(w_m(-86400, -1)))
+        .withColumn("m_fraud_cnt_7d",  F.sum("label_is_fraud").over(w_m(-(7*86400), -1)))
+        .withColumn("m_fraud_cnt_30d", F.sum("label_is_fraud").over(w_m(-(30*86400), -1)))
     )
 
     # ---- Output: training dataset (per-transaction) ----

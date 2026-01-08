@@ -162,6 +162,20 @@ def upload_bronze_parquet(**context) -> dict:
     s3.put_object(Bucket=bucket, Key=tx_latest_key, Body=(tx_prefix + "\n").encode("utf-8"), ContentType="text/plain")
     s3.put_object(Bucket=bucket, Key=lbl_latest_key, Body=(lbl_prefix + "\n").encode("utf-8"), ContentType="text/plain")
 
+    # Global "current" pointers (stable contract for downstream jobs)
+    s3.put_object(
+        Bucket=bucket,
+        Key="bronze/transactions/_CURRENT",
+        Body=(tx_prefix + "\n").encode("utf-8"),
+        ContentType="text/plain",
+    )
+    s3.put_object(
+        Bucket=bucket,
+        Key="bronze/fraud_labels/_CURRENT",
+        Body=(lbl_prefix + "\n").encode("utf-8"),
+        ContentType="text/plain",
+    )
+
     return {"tx_prefix": tx_prefix, "lbl_prefix": lbl_prefix}
 
 
@@ -176,6 +190,19 @@ def verify_bronze_outputs(**context) -> None:
     for name, prefix in [("transactions", tx_latest), ("fraud_labels", lbl_latest)]:
         if not prefix:
             raise RuntimeError(f"Missing bronze _LATEST for {name} (dt={ds})")
+        resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix + "/")
+        keys = [c["Key"] for c in resp.get("Contents", [])]
+        parquet_keys = [k for k in keys if k.endswith(".parquet")]
+        if not parquet_keys:
+            raise RuntimeError(f"No parquet files found under s3://{bucket}/{prefix}/")
+        print(f"Verified bronze {name}: {len(parquet_keys)} parquet file(s) under s3://{bucket}/{prefix}/")
+    
+    tx_current = _read_text_object(s3, bucket, "bronze/transactions/_CURRENT")
+    lbl_current = _read_text_object(s3, bucket, "bronze/fraud_labels/_CURRENT")
+
+    for name, prefix in [("transactions(_CURRENT)", tx_current), ("fraud_labels(_CURRENT)", lbl_current)]:
+        if not prefix:
+            raise RuntimeError(f"Missing bronze _CURRENT for {name}")
         resp = s3.list_objects_v2(Bucket=bucket, Prefix=prefix + "/")
         keys = [c["Key"] for c in resp.get("Contents", [])]
         parquet_keys = [k for k in keys if k.endswith(".parquet")]
