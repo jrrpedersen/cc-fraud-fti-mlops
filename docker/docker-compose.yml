@@ -24,10 +24,19 @@ x-airflow-common: &airflow-common
     AWS_DEFAULT_REGION: us-east-1
     S3_ENDPOINT_URL: http://minio:9000
 
+    # --- MLflow (tracking server + artifact store) ---
+    MLFLOW_TRACKING_URI: http://mlflow:5000
+    MLFLOW_EXPERIMENT_NAME: ccfraud-train
+    MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+
     # Optional: install a couple small libs at container start (ok for Phase 1)
     # Later we’ll bake these into a custom image for speed/reproducibility.
     # _PIP_ADDITIONAL_REQUIREMENTS: "boto3 s3fs redis requests"
 
+    # --- Training DAG behavior ---
+    TRAIN_DATA_POINTER: latest          # "latest" or "current"
+    MLFLOW_REGISTERED_MODEL: ccfraud_baseline
+    MLFLOW_SET_ALIAS: candidate         # optional (newer MLflow)
     PYTHONPATH: /opt/airflow/repo
 
   volumes:
@@ -134,9 +143,13 @@ services:
       mc alias set local http://minio:9000 minioadmin minioadmin;
       mc mb -p local/mlops || true;
       mc mb -p local/feast || true;
+      mc mb -p local/mlflow || true;
+      mc anonymous set none local/mlflow || true;
       mc ls local;
       "
     restart: "no"
+
+
 
   # Redis for Feast online store (simple/local). Later we can add a separate Redis for Airflow Celery if needed.
   redis:
@@ -162,6 +175,36 @@ services:
     volumes:
       - ../feature_repo:/feature_repo
     working_dir: /feature_repo
+  
+  mlflow:
+    image: cc-fraud-airflow:local
+    working_dir: /opt/airflow/repo
+    volumes:
+      - ../:/opt/airflow/repo
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_DEFAULT_REGION: us-east-1
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_S3_ADDRESSING_STYLE: path
+    command: >
+      bash -lc "
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql+psycopg2://airflow:airflow@postgres/mlflow
+      --artifacts-destination s3://mlflow/artifacts
+      "
+    ports:
+      - "127.0.0.1:5001:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-mc:
+        condition: service_completed_successfully
+
 
 volumes:
   postgres-db-volume:

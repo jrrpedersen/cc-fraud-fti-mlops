@@ -1,0 +1,15 @@
+artifact_uri: file:///opt/airflow/repo/mlruns/774143709959006124/959c30a75c7042258e42a54d8c01180c/artifacts
+end_time: 1770110252537
+entry_point_name: ''
+experiment_id: '774143709959006124'
+lifecycle_stage: active
+run_id: 959c30a75c7042258e42a54d8c01180c
+run_name: dashing-foal-757
+run_uuid: 959c30a75c7042258e42a54d8c01180c
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1770110243862
+status: 3
+tags: []
+user_id: airflow

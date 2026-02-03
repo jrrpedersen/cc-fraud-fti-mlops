@@ -1,0 +1,6 @@
+artifact_location: file:///opt/airflow/repo/mlruns/774143709959006124
+creation_time: 1770107338082
+experiment_id: '774143709959006124'
+last_update_time: 1770107338082
+lifecycle_stage: active
+name: ccfraud-train

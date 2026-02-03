@@ -19,4 +19,5 @@ RUN pip install --no-cache-dir \
     pandas==2.2.3 \
     pyarrow==17.0.0 \
     scikit-learn==1.5.2 \
-    mlflow==2.17.2
+    mlflow==2.17.2 \
+    s3fs==2024.10.0
